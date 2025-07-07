@@ -120,10 +120,6 @@ namespace PicacgMangaDownloader.API
 
         private static Dictionary<string, string> GetRequestHeader(string url, string method, string? authorization = null)
         {
-            if (string.IsNullOrEmpty(authorization))
-            {
-                return [];
-            }
             url = url.Replace(BaseUrl, "");
             method = method.ToUpper();
 
@@ -134,7 +130,7 @@ namespace PicacgMangaDownloader.API
             string appVersion = "2.2.1.3.3.4";
             string appBuildVersion = "45";
 
-            return new()
+            var header = new Dictionary<string, string>()
             {
                 {"signature", GetSignature(url, method, BaseUrl, timestamp, timeDiff, nonce, apiKey, appVersion, appBuildVersion) },
                 {"api-key", apiKey },
@@ -150,6 +146,15 @@ namespace PicacgMangaDownloader.API
                 {"version", "v1.5.2" },
                 {"accept", "application/vnd.picacomic.com.v1+json" },
             };
+            if (!string.IsNullOrEmpty(authorization))
+            {
+                header.Add("authorization", authorization);
+            }
+            if (method == "POST")
+            {
+                header.Add("Content-Type", "application/json; charset=UTF-8");
+            }
+            return header;
         }
 
         private static string GetSignature(string url, string method, string baseUrl, long timestamp, long timeDiff, string nonce, string apiKey, string appVersion, string appBuildVersion)

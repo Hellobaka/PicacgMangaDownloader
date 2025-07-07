@@ -8,9 +8,9 @@ namespace PicacgMangaDownloader.Model
 {
     public class DownloadTask
     {
-        public static Action<DownloadTask> OnCompleted;
-        public static Action<DownloadTask> OnFailed;
-        public static Action<DownloadTask, long, long, double> OnDownloadProgressUpdated;
+        public static event Action<DownloadTask> OnCompleted;
+        public static event Action<DownloadTask> OnFailed;
+        public static event Action<DownloadTask, long, long, double> OnDownloadProgressUpdated;
 
         public string? Url { get; set; }
 

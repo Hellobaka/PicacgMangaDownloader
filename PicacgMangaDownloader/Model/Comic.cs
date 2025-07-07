@@ -1,6 +1,9 @@
 ﻿using PicacgMangaDownloader.API;
+using PropertyChanged;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -258,24 +261,6 @@ namespace PicacgMangaDownloader.Model
         }
     }
 
-    public class ComicPage
-    {
-        [JsonPropertyName("page")]
-        public int CurrentPage { get; set; }
-      
-        [JsonPropertyName("total")]
-        public int TotalPage { get; set; }
-      
-        [JsonPropertyName("pages")]
-        public int TotalPages { get; set; }
-      
-        [JsonPropertyName("limit")]
-        public int PageLimit { get; set; }
-       
-        [JsonPropertyName("docs")]
-        public Media[]? Pages { get; set; }
-    }
-
     public class Media
     {
         [JsonPropertyName("originalName")]
@@ -300,6 +285,107 @@ namespace PicacgMangaDownloader.Model
             }
 
             return $"{FileServer.TrimEnd('/')}/static/{Path.TrimStart('/')}";
+        }
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class ComicWrapper
+    {
+        public ComicInfo? Comic { get; set; }
+
+        [AlsoNotifyFor("EpisodeFinishedCount", "EpisodeTotalCount", "Percentage")]
+        public ObservableCollection<ComicEpisodeWrapper> Episodes { get; set; } = [];
+
+        public bool Selected { get; set; }
+
+        public int EpisodeFinishedCount => Episodes.Count(x => x.TotalCount == (x.Failed + x.DownloadedCount));
+
+        public int EpisodeTotalCount => Episodes.Count;
+
+        public double Percentage => EpisodeTotalCount > 0 ? (double)EpisodeFinishedCount / EpisodeTotalCount * 100 : 0.0;
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class ComicEpisodeWrapper
+    {
+        public ComicEpisode? Episode { get; set; }
+
+        [AlsoNotifyFor("Failed", "DownloadedCount", "TotalCount", "Percentage")]
+        public ObservableCollection<ComicPageWrapper> Pages { get; set; } = [];
+
+        public bool Selected { get; set; }
+
+        public int Failed => Pages.Count(x => x.Failed);
+
+        public int DownloadedCount => Pages.Count(x => x.DownloadStatus);
+
+        public int TotalCount => Pages.Count;
+
+        public double Percentage => TotalCount > 0 ? (double)(DownloadedCount + Failed) / TotalCount * 100 : 0.0;
+        
+        public void Subscribe()
+        {
+            foreach (var page in Pages)
+            {
+                page.SubscribeDownloadProgress();
+            }
+        }
+
+        public void Unsubscribe()
+        {
+            foreach (var page in Pages)
+            {
+                page.UnsubscribeDownloadProgress();
+            }
+        }
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class ComicPageWrapper
+    {
+        public Media? Media { get; set; }
+
+        public DownloadTask? DownloadTask { get; set; }
+
+        public bool Failed { get; set; }
+
+        public bool DownloadStatus { get; set; }
+
+        public void SubscribeDownloadProgress()
+        {
+            if(DownloadTask == null)
+            {
+                return;
+            }
+            DownloadTask.OnCompleted -= DownloadTask_OnCompleted;
+            DownloadTask.OnFailed -= DownloadTask_OnFailed;
+            DownloadTask.OnCompleted += DownloadTask_OnCompleted;
+            DownloadTask.OnFailed += DownloadTask_OnFailed;
+            //DownloadTask.OnDownloadProgressUpdated += DownloadTask_OnDownloadProgressUpdated;
+        }
+
+        public void UnsubscribeDownloadProgress()
+        {
+            if (DownloadTask == null)
+            {
+                return;
+            }
+            DownloadTask.OnCompleted -= DownloadTask_OnCompleted;
+            DownloadTask.OnFailed -= DownloadTask_OnFailed;
+        }
+
+        private void DownloadTask_OnDownloadProgressUpdated(DownloadTask arg1, long arg2, long arg3, double arg4)
+        {
+        }
+
+        private void DownloadTask_OnFailed(DownloadTask downloadTask)
+        {
+            Failed = true;
+        }
+
+        private void DownloadTask_OnCompleted(DownloadTask downloadTask)
+        {
+            DownloadStatus = true;
         }
     }
 }
