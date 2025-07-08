@@ -27,10 +27,11 @@ namespace PicacgMangaDownloader.API
                     // Handle the case where the header could not be added
                 }
             }
+            http.DefaultRequestHeaders.Add("Connection", "keep-alive");
             using HttpRequestMessage request = new(new HttpMethod(method.ToUpper()), url);
             if (param != null)
             {
-                request.Content = new StringContent(JsonSerializer.Serialize(param), Encoding.UTF8, "application/json");
+                request.Content = new StringContent(JsonSerializer.Serialize(param), new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "UTF-8"));
             }
             var response = await http.SendAsync(request);
 
@@ -40,20 +41,13 @@ namespace PicacgMangaDownloader.API
             return result.Data;
         }
 
-        private static async Task<(Stream stream, long fileLength)> DownloadStream(string url, string? authorization = null)
+        public static async Task<(Stream stream, long fileLength)> DownloadStream(string url, string? authorization = null)
         {
             using HttpClient http = new()
             {
                 BaseAddress = new Uri(BaseUrl),
             };
-            foreach (var header in GetRequestHeader(url, "Download", authorization))
-            {
-                if (!http.DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value))
-                {
-                    // Handle the case where the header could not be added
-                }
-            }
-            using HttpRequestMessage request = new(new("Download"), url);
+            using HttpRequestMessage request = new(HttpMethod.Get, url);
             var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             if (response.IsSuccessStatusCode)
             {
@@ -62,59 +56,6 @@ namespace PicacgMangaDownloader.API
             else
             {
                 throw new HttpRequestException($"Failed to download stream: {response.ReasonPhrase}");
-            }
-        }
-
-        public static async Task<bool> SaveStreamToFile(DownloadTask downloadTask)
-        {
-            if (string.IsNullOrEmpty(downloadTask.Url) || string.IsNullOrEmpty(downloadTask.FileSavePath))
-            {
-                throw new ArgumentException("DownloadTask must have a valid Url and FileSavePath.");
-            }
-            try
-            {
-                (Stream stream, long fileLength) = await DownloadStream(downloadTask.Url);
-                using (stream)
-                {
-                    downloadTask.TotalBytes = fileLength;
-                    downloadTask.DownloadedBytes = 0;
-
-                    using FileStream fileStream = new(downloadTask.FileSavePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-                    var buffer = new byte[81920];
-                    long totalRead = 0;
-                    int read;
-                    var lastReport = DateTime.Now;
-
-                    while (true)
-                    {
-                        // 超时
-                        var readTask = stream.ReadAsync(buffer, 0, buffer.Length);
-                        if (await Task.WhenAny(readTask, Task.Delay(downloadTask.ReadBytesTimeout)) == readTask)
-                        {
-                            read = readTask.Result;
-                            if (read == 0) break;
-                            await fileStream.WriteAsync(buffer.AsMemory(0, read));
-                            totalRead += read;
-                        }
-                        else
-                        {
-                            throw new TimeoutException($"从流读取字节超时！");
-                        }
-
-                        if (fileLength > 0 && (DateTime.Now - lastReport).TotalMilliseconds > 100)
-                        {
-                            downloadTask.UpdateProgress(totalRead, fileLength);
-                            lastReport = DateTime.Now;
-                        }
-                    }
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving stream to file: {ex.Message}");
-                return false;
             }
         }
 

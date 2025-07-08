@@ -18,10 +18,6 @@ namespace PicacgMangaDownloader.API
 
         public void Check()
         {
-            if (Code != 0)
-            {
-                throw new Exception($"API Error: {Code} - {Message}");
-            }
             if (Error.HasValue && Error.Value != 0)
             {
                 throw new Exception($"API Error: {Error.Value} - {Message}");
