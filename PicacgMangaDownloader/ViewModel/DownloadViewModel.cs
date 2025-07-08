@@ -126,26 +126,63 @@ namespace PicacgMangaDownloader.ViewModel
                 MainWindow.ShowError("未指定下载路径，请重新选择");
                 return;
             }
+            if (Comics.Count == 0)
+            {
+                MainWindow.ShowError("没有可下载的漫画，请先获取漫画列表");
+                return;
+            }
+            if (Comics.All(x => !x.Selected))
+            {
+                MainWindow.ShowError("没有选择任何漫画，请先选择要下载的漫画");
+                return;
+            }
+            if (User == null || !IsLogin)
+            {
+                MainWindow.ShowError("请先登录账号");
+                return;
+            }
+            if (Downloading)
+            {
+                if (await MainWindow.ShowConfirmAsync("当前有下载任务正在进行，是否取消所有下载任务？"))
+                {
+                    CancelDownload();
+                }
+                return;
+            }
+
             Directory.CreateDirectory(DownloadPath);
+            int index = 1;
             foreach (var comic in Comics.Where(x => x.Selected))
             {
-                // await comic.Comic.GetMoreInformation(User);
-                await comic.GetEpisodes(User);
-                if (comic.Episodes.Count == 0)
+                if (comic.Comic == null)
                 {
-                    MainWindow.ShowError($"漫画 {comic.Comic.ComicTitle} 没有可下载的章节");
+                    MainWindow.ShowError($"漫画索引 {index} 信息不完整，无法下载");
                     continue;
                 }
-                // 启动所有章节下载（可并发）
-                var tasks = comic.Episodes.Select(ep => ep.StartDownload());
+
+                // await comic.Comic.GetMoreInformation(User);
+                if (comic.Episodes.Count == 0)
+                {
+                    await comic.GetEpisodes(User);
+                    if (comic.Episodes.Count == 0)
+                    {
+                        MainWindow.ShowError($"漫画 {comic.Comic.ComicTitle} 没有可下载的章节");
+                        continue;
+                    }
+                }
+                // 启动所有章节下载
+                var tasks = comic.Episodes.Where(x => x.Selected).Select(ep => ep.StartDownload());
                 await Task.WhenAll(tasks);
+                index++;
             }
         }
-        
-        // 取消所有正在下载的章节
+
+        /// <summary>
+        /// 取消所有正在下载的章节
+        /// </summary>
         private void CancelDownload()
         {
-            foreach (var comic in Comics.Where(x => x.Selected))
+            foreach (var comic in Comics)
             {
                 foreach (var ep in comic.Episodes)
                 {

@@ -1,19 +1,12 @@
 ﻿using PicacgMangaDownloader.API;
 using PicacgMangaDownloader.ViewModel;
 using PropertyChanged;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using System.Windows.Controls;
-using System.Windows.Documents;
 
 namespace PicacgMangaDownloader.Model
 {
@@ -83,29 +76,22 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new InvalidOperationException("EpisodeId must be set before fetching pages.");
             }
-            try
+            var pages = await GetComicPages(1, user);
+            if (pages == null || pages.Length == 0)
             {
-                var pages = await GetComicPages(1, user);
-                if (pages == null || pages.Length == 0)
-                {
-                    Console.WriteLine("No pages found for this episode.");
-                    return;
-                }
-                Pages = [.. Pages, .. pages];
-                for (int i = 2; i <= TotalPage; i++)
-                {
-                    var nextPages = await GetComicPages(i, user);
-                    if (nextPages == null || nextPages.Length == 0)
-                    {
-                        Console.WriteLine($"No more pages found on page {i}.");
-                        break;
-                    }
-                    Pages = [.. Pages, .. nextPages];
-                }
+                Console.WriteLine("No pages found for this episode.");
+                return;
             }
-            catch (Exception ex)
+            Pages = [.. Pages, .. pages];
+            for (int i = 2; i <= TotalPage; i++)
             {
-                Console.WriteLine($"Error fetching pages: {ex.Message}");
+                var nextPages = await GetComicPages(i, user);
+                if (nextPages == null || nextPages.Length == 0)
+                {
+                    Console.WriteLine($"No more pages found on page {i}.");
+                    break;
+                }
+                Pages = [.. Pages, .. nextPages];
             }
         }
 
@@ -115,17 +101,9 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new InvalidOperationException("User must be logged in to fetch pages.");
             }
-            try
-            {
-                var node = await Picacg.SendRequest<JsonNode>($"comics/{ComicId}/order/{EpisodeOrder}/pages?page={page}", user.Token);
-                TotalPage = Math.Max(TotalPage, (int)node["pages"]["pages"]);
-                return JsonSerializer.Deserialize<ComicPage[]>(node["pages"]["docs"]);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching pages: {ex.Message}");
-                return [];
-            }
+            var node = await Picacg.SendRequest<JsonNode>($"comics/{ComicId}/order/{EpisodeOrder}/pages?page={page}", user.Token);
+            TotalPage = Math.Max(TotalPage, (int)node["pages"]["pages"]);
+            return JsonSerializer.Deserialize<ComicPage[]>(node["pages"]["docs"]);
         }
     }
 
@@ -206,29 +184,23 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new InvalidOperationException("ComicId must be set before fetching episodes.");
             }
-            try
+
+            var episode = await GetComicEpisodes(1, user.Token);
+            if (episode == null || episode.Eps == null || episode.Eps.Length == 0)
             {
-                var episode = await GetComicEpisodes(1, user.Token);
-                if (episode == null || episode.Eps == null || episode.Eps.Length == 0)
-                {
-                    Console.WriteLine("No episodes found for this comic.");
-                    return;
-                }
-                Episodes = [.. Episodes, .. episode.Eps];
-                for (int i = 2; i <= episode.TotalPage; i++)
-                {
-                    var nextList = await GetComicEpisodes(i, user.Token);
-                    if (nextList == null || nextList.Eps == null || nextList.Eps.Length == 0)
-                    {
-                        Console.WriteLine($"No more episodes found on page {i}.");
-                        break;
-                    }
-                    Episodes = [.. Episodes, .. nextList.Eps];
-                }
+                MainWindow.ShowInfo("章节列表为空");
+                return;
             }
-            catch (Exception ex)
+            Episodes = [.. Episodes, .. episode.Eps];
+            for (int i = 2; i <= episode.TotalPage; i++)
             {
-                Console.WriteLine($"Error fetching episodes: {ex.Message}");
+                var nextList = await GetComicEpisodes(i, user.Token);
+                if (nextList == null || nextList.Eps == null || nextList.Eps.Length == 0)
+                {
+                    // No more episodes found on page i
+                    break;
+                }
+                Episodes = [.. Episodes, .. nextList.Eps];
             }
         }
 
@@ -250,28 +222,21 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new InvalidOperationException("User must be logged in and ComicId must be set.");
             }
-            try
+            var node = await Picacg.SendRequest<JsonNode>($"comics/{ComicId}", user.Token);
+            var comicInfo = JsonSerializer.Deserialize<ComicInfo>(node["comic"]);
+            if (comicInfo != null)
             {
-                var node = await Picacg.SendRequest<JsonNode>($"comics/{ComicId}", user.Token);
-                var comicInfo = JsonSerializer.Deserialize<ComicInfo>(node["comic"]);
-                if (comicInfo != null)
-                {
-                    this.Author = comicInfo.Author;
-                    this.Tags = comicInfo.Tags;
-                    this.Description = comicInfo.Description;
-                    this.ChineseTeam = comicInfo.ChineseTeam;
-                    this.UpdatedAt = comicInfo.UpdatedAt;
-                    this.CreatedAt = comicInfo.CreatedAt;
-                    this.ViewsCount = comicInfo.ViewsCount;
-                    this.CommentsCount = comicInfo.CommentsCount;
-                    this.Favorited = comicInfo.Favorited;
-                    this.Liked = comicInfo.Liked;
-                    this.Thumb = comicInfo.Thumb;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching more information: {ex.Message}");
+                this.Author = comicInfo.Author;
+                this.Tags = comicInfo.Tags;
+                this.Description = comicInfo.Description;
+                this.ChineseTeam = comicInfo.ChineseTeam;
+                this.UpdatedAt = comicInfo.UpdatedAt;
+                this.CreatedAt = comicInfo.CreatedAt;
+                this.ViewsCount = comicInfo.ViewsCount;
+                this.CommentsCount = comicInfo.CommentsCount;
+                this.Favorited = comicInfo.Favorited;
+                this.Liked = comicInfo.Liked;
+                this.Thumb = comicInfo.Thumb;
             }
         }
     }
@@ -341,36 +306,67 @@ namespace PicacgMangaDownloader.Model
 
         public double Percentage => EpisodeTotalCount > 0 ? (double)EpisodeFinishedCount / EpisodeTotalCount * 100 : 0.0;
 
+        public bool GettingEpisode { get; set; } = true;
+
+        public bool GettingEpisodeHasError { get; set; }
+
         public async Task GetEpisodes(User user)
         {
-            if (Episodes.Count == 0)
+            if (Comic == null || string.IsNullOrEmpty(Comic.ComicId) || string.IsNullOrEmpty(Comic.ComicTitle) || user == null || string.IsNullOrEmpty(user.Token))
             {
-                await Comic.GetEpisodes(user);
-                UnsubscribeEpisodeChanged();
-                Episodes = [];
-                foreach (var ep in Comic.Episodes)
+                throw new InvalidOperationException("Comic must be set and user must be logged in to fetch episodes.");
+            }
+            try
+            {
+                if (Episodes.Count == 0)
                 {
-                    ep.ComicId = Comic.ComicId;
-                    var epWrapper = new ComicEpisodeWrapper()
+                    GettingEpisode = true;
+                    GettingEpisodeHasError = false;
+                    await Comic.GetEpisodes(user);
+                    UnsubscribeEpisodeChanged();
+                    Episodes = [];
+                    foreach (var ep in Comic.Episodes)
                     {
-                        ComicTitle = Comic.ComicTitle,
-                        Episode = ep,
-                        Pages = [],
-                    };
-                    await epWrapper.Episode.GetPages(user);
-                    foreach (var page in epWrapper.Episode.Pages)
-                    {
-                        var pageWrapper = new ComicPageWrapper()
+                        ep.ComicId = Comic.ComicId;
+                        var epWrapper = new ComicEpisodeWrapper()
                         {
-                            Page = page,
+                            ComicTitle = Comic.ComicTitle,
+                            Episode = ep,
+                            Pages = [],
+                            Selected = true,
                         };
-                        epWrapper.Pages.Add(pageWrapper);
-                    }
+                        try
+                        {
+                            await epWrapper.Episode.GetPages(user);
+                            foreach (var page in epWrapper.Episode.Pages)
+                            {
+                                var pageWrapper = new ComicPageWrapper()
+                                {
+                                    Page = page,
+                                };
+                                epWrapper.Pages.Add(pageWrapper);
+                            }
+                        }
+                        catch (Exception exc)
+                        {
+                            MainWindow.ShowError($"获取 {ep.EpisodeTitle} 图片列表时发生错误：{exc}");
+                            throw;
+                        }
 
-                    epWrapper.Subscribe();
-                    Episodes.Add(epWrapper);
+                        epWrapper.Subscribe();
+                        Episodes.Add(epWrapper);
+                    }
+                    SubscribeEpisodeChanged();
                 }
-                SubscribeEpisodeChanged();
+            }
+            catch (Exception e)
+            {
+                GettingEpisodeHasError = true;
+                MainWindow.ShowError($"获取 {Comic?.ComicTitle} 章节列表时发生错误：{e}");
+            }
+            finally
+            {
+                GettingEpisode = false;
             }
         }
 
