@@ -1,15 +1,18 @@
 ﻿using PicacgMangaDownloader.API;
+using PicacgMangaDownloader.ViewModel;
 using PropertyChanged;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Windows.Controls;
 using System.Windows.Documents;
 
 namespace PicacgMangaDownloader.Model
@@ -54,19 +57,21 @@ namespace PicacgMangaDownloader.Model
     {
         [JsonPropertyName("_id")]
         public string? EpisodeId { get; set; }
-       
+
         [JsonPropertyName("title")]
         public string? EpisodeTitle { get; set; }
-       
+
         [JsonPropertyName("order")]
         public int? EpisodeOrder { get; set; }
-       
+
         [JsonPropertyName("updated_at")]
         public DateTime? UpdatedAt { get; set; }
 
         public string ComicId { get; set; } = "";
 
-        public Media[] Pages { get; set; } = [];
+        public int TotalPage { get; set; }
+
+        public ComicPage[] Pages { get; set; } = [];
 
         public async Task GetPages(User user)
         {
@@ -87,7 +92,7 @@ namespace PicacgMangaDownloader.Model
                     return;
                 }
                 Pages = [.. Pages, .. pages];
-                for (int i = 2; i <= pages.Length; i++)
+                for (int i = 2; i <= TotalPage; i++)
                 {
                     var nextPages = await GetComicPages(i, user);
                     if (nextPages == null || nextPages.Length == 0)
@@ -104,7 +109,7 @@ namespace PicacgMangaDownloader.Model
             }
         }
 
-        private async Task<Media[]> GetComicPages(int page, User user)
+        private async Task<ComicPage[]> GetComicPages(int page, User user)
         {
             if (user == null || string.IsNullOrEmpty(user.Token))
             {
@@ -113,7 +118,8 @@ namespace PicacgMangaDownloader.Model
             try
             {
                 var node = await Picacg.SendRequest<JsonNode>($"comics/{ComicId}/order/{EpisodeOrder}/pages?page={page}", user.Token);
-                return JsonSerializer.Deserialize<Media[]>(node["pages"]["docs"]);
+                TotalPage = Math.Max(TotalPage, (int)node["pages"]["pages"]);
+                return JsonSerializer.Deserialize<ComicPage[]>(node["pages"]["docs"]);
             }
             catch (Exception ex)
             {
@@ -121,6 +127,15 @@ namespace PicacgMangaDownloader.Model
                 return [];
             }
         }
+    }
+
+    public class ComicPage
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+
+        [JsonPropertyName("media")]
+        public Media Media { get; set; }
     }
 
     public class ComicInfo
@@ -149,8 +164,8 @@ namespace PicacgMangaDownloader.Model
         [JsonPropertyName("likesCount")]
         public int? LikesCount { get; set; }
 
-        [JsonPropertyName("_creator")]
-        public string? Creator { get; set; }
+        //[JsonPropertyName("_creator")]
+        //public string? Creator { get; set; }
 
         [JsonPropertyName("description")]
         public string? Description { get; set; }
@@ -288,6 +303,14 @@ namespace PicacgMangaDownloader.Model
         }
     }
 
+    public enum DownloadStatus
+    {
+        NotDownloaded,
+        Downloading,
+        Downloaded,
+        DownloadFailed
+    }
+
     [AddINotifyPropertyChangedInterface]
     public class ComicWrapper
     {
@@ -298,16 +321,59 @@ namespace PicacgMangaDownloader.Model
 
         public bool Selected { get; set; }
 
+        public DownloadStatus Downloading { get; set; } = Model.DownloadStatus.NotDownloaded;
+
+        public string DownloadStatus => Downloading switch
+        {
+            Model.DownloadStatus.Downloading => "下载中",
+            Model.DownloadStatus.Downloaded => "已下载",
+            Model.DownloadStatus.DownloadFailed => "下载失败",
+            _ => "未开始",
+        };
+
         public int EpisodeFinishedCount => Episodes.Count(x => x.TotalCount == (x.Failed + x.DownloadedCount));
 
         public int EpisodeTotalCount => Episodes.Count;
 
         public double Percentage => EpisodeTotalCount > 0 ? (double)EpisodeFinishedCount / EpisodeTotalCount * 100 : 0.0;
+
+        public async Task GetEpisodes(User user)
+        {
+            if (Episodes.Count == 0)
+            {
+                await Comic.GetEpisodes(user);
+                Episodes = [];
+                foreach (var ep in Comic.Episodes)
+                {
+                    ep.ComicId = Comic.ComicId;
+                    var epWrapper = new ComicEpisodeWrapper()
+                    {
+                        ComicTitle = Comic.ComicTitle,
+                        Episode = ep,
+                        Pages = [],
+                    };
+                    await epWrapper.Episode.GetPages(user);
+                    foreach (var page in epWrapper.Episode.Pages)
+                    {
+                        var pageWrapper = new ComicPageWrapper()
+                        {
+                            Page = page,
+                        };
+                        epWrapper.Pages.Add(pageWrapper);
+                    }
+
+                    epWrapper.Subscribe();
+                    Episodes.Add(epWrapper);
+                }
+            }
+        }
     }
 
     [AddINotifyPropertyChangedInterface]
     public class ComicEpisodeWrapper
     {
+        public string ComicTitle { get; set; } = string.Empty;
+
         public ComicEpisode? Episode { get; set; }
 
         [AlsoNotifyFor("Failed", "DownloadedCount", "TotalCount", "Percentage")]
@@ -315,14 +381,96 @@ namespace PicacgMangaDownloader.Model
 
         public bool Selected { get; set; }
 
-        public int Failed => Pages.Count(x => x.Failed);
+        public int Failed => Pages.Count(x => x.Downloading == Model.DownloadStatus.DownloadFailed);
 
-        public int DownloadedCount => Pages.Count(x => x.DownloadStatus);
+        public int DownloadedCount => Pages.Count(x => x.Downloading == Model.DownloadStatus.Downloaded);
 
         public int TotalCount => Pages.Count;
 
         public double Percentage => TotalCount > 0 ? (double)(DownloadedCount + Failed) / TotalCount * 100 : 0.0;
-        
+
+        public DownloadStatus Downloading { get; set; } = Model.DownloadStatus.NotDownloaded;
+
+        public string DownloadStatus => Downloading switch
+        {
+            Model.DownloadStatus.Downloading => "下载中",
+            Model.DownloadStatus.Downloaded => "已下载",
+            Model.DownloadStatus.DownloadFailed => "下载失败",
+            _ => "未开始",
+        };
+
+        private CancellationTokenSource? DownloadCancelToken { get; set; }
+
+        /// <summary>
+        /// 启动本章节所有页面的下载任务，支持最大并发数限制。
+        /// </summary>
+        public async Task StartDownload()
+        {
+            DownloadCancelToken?.Cancel();
+            DownloadCancelToken = new CancellationTokenSource();
+            var token = DownloadCancelToken.Token;
+            this.Downloading = Model.DownloadStatus.Downloading;
+
+            string episodeFolder = Path.Combine(
+                DownloadViewModel.Instance.DownloadPath ?? string.Empty,
+                ComicTitle ?? string.Empty,
+                DownloadViewModel.Instance.KeepEpisodeTitle ? (Episode?.EpisodeTitle ?? string.Empty) : (Episode?.EpisodeOrder?.ToString() ?? string.Empty));
+
+            var throttler = new SemaphoreSlim(DownloadViewModel.Instance.MaxParallelDownloads);
+            var tasks = Pages.Select(async page =>
+            {
+                await throttler.WaitAsync(token);
+                try
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    page.CreateDownloadTask(episodeFolder);
+                    if (page.DownloadTask is DownloadTask task)
+                    {
+                        try
+                        {
+                            await task.StartAsync(token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // 取消时忽略异常
+                        }
+                    }
+                }
+                finally
+                {
+                    throttler.Release();
+                }
+            });
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            finally
+            {
+                this.Downloading = Pages.All(p => p.Downloading == Model.DownloadStatus.Downloaded) ? Model.DownloadStatus.Downloaded :
+                                   Pages.Any(p => p.Downloading == Model.DownloadStatus.DownloadFailed) ? Model.DownloadStatus.DownloadFailed :
+                                   Model.DownloadStatus.NotDownloaded;
+            }
+        }
+
+        /// <summary>
+        /// 停止本章节所有页面的下载任务。
+        /// </summary>
+        public async Task StopDownload()
+        {
+            DownloadCancelToken?.Cancel();
+            foreach (var page in Pages)
+            {
+                page.CancelDownload();
+            }
+            this.Downloading = Model.DownloadStatus.NotDownloaded;
+            await Task.CompletedTask;
+        }
+
+
         public void Subscribe()
         {
             foreach (var page in Pages)
@@ -343,17 +491,46 @@ namespace PicacgMangaDownloader.Model
     [AddINotifyPropertyChangedInterface]
     public class ComicPageWrapper
     {
-        public Media? Media { get; set; }
+        public ComicPage? Page { get; set; }
 
         public DownloadTask? DownloadTask { get; set; }
 
-        public bool Failed { get; set; }
+        public DownloadStatus Downloading { get; set; } = Model.DownloadStatus.NotDownloaded;
 
-        public bool DownloadStatus { get; set; }
+        public void CreateDownloadTask(string parentDirectory)
+        {
+            if (Page == null) return;
+            var media = Page.Media;
+            string fileName = media.OriginalName ?? Path.GetFileName(media.Path ?? Guid.NewGuid().ToString());
+            string filePath = Path.Combine(parentDirectory, fileName);
+            DownloadTask = new DownloadTask
+            {
+                FileSavePath = filePath,
+                Url = media.GetFullUrl(),
+            };
+            Downloading = Model.DownloadStatus.Downloading;
+            SubscribeDownloadProgress();
+        }
+
+        public void CancelDownload()
+        {
+            Downloading = Model.DownloadStatus.NotDownloaded;
+            DownloadTask?.Cancel();
+            UnsubscribeDownloadProgress();
+        }
+
+
+        public string DownloadStatus => Downloading switch
+        {
+            Model.DownloadStatus.Downloading => "下载中",
+            Model.DownloadStatus.Downloaded => "已下载",
+            Model.DownloadStatus.DownloadFailed => "下载失败",
+            _ => "未开始",
+        };
 
         public void SubscribeDownloadProgress()
         {
-            if(DownloadTask == null)
+            if (DownloadTask == null)
             {
                 return;
             }
@@ -380,12 +557,12 @@ namespace PicacgMangaDownloader.Model
 
         private void DownloadTask_OnFailed(DownloadTask downloadTask)
         {
-            Failed = true;
+            Downloading = Model.DownloadStatus.DownloadFailed;
         }
 
         private void DownloadTask_OnCompleted(DownloadTask downloadTask)
         {
-            DownloadStatus = true;
+            Downloading = Model.DownloadStatus.Downloaded;
         }
     }
 }

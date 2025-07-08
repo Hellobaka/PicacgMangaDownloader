@@ -6,14 +6,18 @@
     xmlns:hc="https://handyorg.github.io/handycontrol"
     xmlns:local="clr-namespace:PicacgMangaDownloader"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:model="clr-namespace:PicacgMangaDownloader.Model"
     xmlns:viewmodel="clr-namespace:PicacgMangaDownloader.ViewModel"
     Title="MainWindow"
-    Width="800"
-    Height="450"
+    Width="900"
+    Height="700"
     d:DataContext="{d:DesignInstance Type=viewmodel:DownloadViewModel}"
     Loaded="Window_Loaded"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">
+    <Window.Resources>
+        <model:ConcatConverter x:Key="ConcatConverter" />
+    </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="auto" />
@@ -31,18 +35,21 @@
                 <ColumnDefinition Width="auto" />
             </Grid.ColumnDefinitions>
             <TextBlock VerticalAlignment="Center">已登录用户：</TextBlock>
-            <TextBlock Grid.Column="1" VerticalAlignment="Center">
-                未登录
-            </TextBlock>
+            <TextBlock
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Text="{Binding DisplayedUserName}" />
             <Button
                 Grid.Column="2"
                 Width="100"
-                Margin="10,0">
+                Margin="10,0"
+                Command="{Binding GetFavoriteComicsCommand}">
                 拉取喜欢列表
             </Button>
             <Button
                 Grid.Column="3"
                 Width="70"
+                Command="{Binding OpenLoginCommand}"
                 Style="{StaticResource ButtonPrimary}">
                 重新登录
             </Button>
@@ -57,11 +64,13 @@
             <TextBox
                 Grid.Column="1"
                 Margin="0,0,10,0"
-                VerticalAlignment="Center" />
+                VerticalAlignment="Center"
+                Text="{Binding DownloadPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             <Button
                 Grid.Column="2"
                 Width="70"
                 HorizontalAlignment="Right"
+                Command="{Binding BrowserOutputPathCommand}"
                 Style="{StaticResource ButtonPrimary}">
                 浏览
             </Button>
@@ -73,38 +82,149 @@
                 <ColumnDefinition Width="auto" />
                 <ColumnDefinition Width="auto" />
             </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Button
+                    Width="70"
+                    Margin="0,0,10,0"
+                    HorizontalAlignment="Left"
+                    Command="{Binding ComicSelectAllCommand}"
+                    Content="全选" />
+                <Button
+                    Width="70"
+                    Margin="0,0,10,0"
+                    HorizontalAlignment="Left"
+                    Command="{Binding ComicSelectRevertCommand}"
+                    Content="反选" />
+            </StackPanel>
             <ToggleButton
                 Grid.Column="1"
                 Margin="5,0"
                 hc:VisualElement.HighlightBrush="{DynamicResource PrimaryBrush}"
                 Content="保留原始章节标题"
-                Style="{StaticResource ToggleButtonSwitch}" />
-            <ToggleButton
-                Grid.Column="2"
-                Margin="5,0,10,0"
-                hc:VisualElement.HighlightBrush="{DynamicResource PrimaryBrush}"
-                Content="Dry-Run"
+                IsChecked="{Binding KeepEpisodeTitle, Mode=TwoWay}"
                 Style="{StaticResource ToggleButtonSwitch}" />
             <Button
                 Grid.Column="3"
                 Width="70"
                 HorizontalAlignment="Right"
+                Command="{Binding StartDownloadCommand}"
                 Style="{StaticResource ButtonPrimary}">
                 开始下载
             </Button>
         </Grid>
-        <DataGrid Grid.Row="3" Margin="0,10,0,0" />
+        <DataGrid
+            Grid.Row="3"
+            Margin="0,10,0,0"
+            hc:DataGridAttach.CanUnselectAllWithBlankArea="True"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            CanUserDeleteRows="False"
+            HeadersVisibility="Column"
+            ItemsSource="{Binding Comics}"
+            RowDetailsVisibilityMode="VisibleWhenSelected"
+            RowHeaderWidth="60"
+            SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Width="70" Header="选中">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn
+                    Width="auto"
+                    Binding="{Binding Comic.ComicTitle}"
+                    Header="标题"
+                    IsReadOnly="True" />
+                <DataGridTextColumn
+                    Binding="{Binding DownloadStatus}"
+                    Header="下载状态"
+                    IsReadOnly="True" />
+                <DataGridTemplateColumn Width="150" Header="下载进度">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ProgressBar Style="{StaticResource ProgressBarSuccess}" Value="{Binding Percentage, Mode=OneWay}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Width="150" Header="章节进度">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock VerticalAlignment="Center">
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource ConcatConverter}">
+                                        <Binding Path="EpisodeFinishedCount" />
+                                        <Binding Path="EpisodeTotalCount" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+            <DataGrid.RowDetailsTemplate>
+                <DataTemplate>
+                    <DataGrid
+                        AutoGenerateColumns="False"
+                        HeadersVisibility="Row"
+                        ItemsSource="{Binding Episodes}">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Width="70" Header="选中">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Binding="{Binding Episode.EpisodeTitle}" Header="标题" />
+                            <DataGridTextColumn Binding="{Binding Episode.EpisodeOrder}" Header="序号" />
+                            <DataGridTextColumn
+                                Binding="{Binding DownloadStatus}"
+                                Header="下载状态"
+                                IsReadOnly="True" />
+                            <DataGridTemplateColumn Width="150" Header="下载进度">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ProgressBar Style="{StaticResource ProgressBarSuccess}" Value="{Binding Percentage, Mode=OneWay}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Width="150" Header="章节进度">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock VerticalAlignment="Center">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource ConcatConverter}">
+                                                    <Binding Path="DownloadedCount" />
+                                                    <Binding Path="TotalCount" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DataTemplate>
+            </DataGrid.RowDetailsTemplate>
+        </DataGrid>
         <Grid Grid.Row="4" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition />
                 <ColumnDefinition Width="auto" />
             </Grid.ColumnDefinitions>
-            <ProgressBar Style="{StaticResource ProgressBarSuccess}" Value="63.87" />
+            <ProgressBar Style="{StaticResource ProgressBarSuccess}" Value="{Binding Percentage, Mode=OneWay}" />
             <TextBlock
                 Grid.Column="1"
                 Margin="5,0,0,0"
                 VerticalAlignment="Center">
-                11/222
+                <TextBlock.Text>
+                    <MultiBinding Converter="{StaticResource ConcatConverter}">
+                        <Binding Path="ComicFinishedCount" />
+                        <Binding Path="ComicTotalCount" />
+                    </MultiBinding>
+                </TextBlock.Text>
             </TextBlock>
         </Grid>
     </Grid>

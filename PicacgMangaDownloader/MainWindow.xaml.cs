@@ -1,6 +1,9 @@
-﻿using PicacgMangaDownloader.ViewModel;
+﻿using PicacgMangaDownloader.Model;
+using PicacgMangaDownloader.ViewModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
 
@@ -15,7 +18,7 @@ namespace PicacgMangaDownloader
         {
             InitializeComponent();
             VM = new();
-            DataContext = this;
+            DataContext = VM;
         }
 
         public DownloadViewModel VM { get; set; }
@@ -28,7 +31,9 @@ namespace PicacgMangaDownloader
                 {
                     var json = File.ReadAllText("Config.json", Encoding.UTF8);
                     var node = JsonNode.Parse(json);
-                    VM.Token = node?["PicacgToken"]?.ToString();
+                    VM.User = JsonSerializer.Deserialize<User>(node?["User"]) ?? new();
+                    VM.Comics = JsonSerializer.Deserialize<ObservableCollection<ComicWrapper>>(node?["Comics"]) ?? [];
+                    VM.DownloadPath = node?["DownloadPath"]?.ToString();
 
                     VM.LoginType = string.IsNullOrEmpty(VM.Token) ? 0 : 1;
                 }
@@ -37,11 +42,10 @@ namespace PicacgMangaDownloader
                     MessageBox.Show($"加载配置失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-
-            Login login = new();
-            login.DataContext = VM;
-            login.Owner = this;
-            login.ShowDialog();
+            if (!(VM.User?.IsLogin ?? false))
+            {
+                VM.OpenLoginCommand.Execute(null);
+            }
         }
 
         public static void ShowInfo(string content)

@@ -43,7 +43,6 @@ namespace PicacgMangaDownloader.Model
         [JsonPropertyName("isPunched")]
         public bool? IsPunched { get; set; }
 
-        [JsonPropertyName("_id")]
         public string? Token { get; set; }
 
         public bool IsLogin => !string.IsNullOrEmpty(UserName) && !string.IsNullOrEmpty(Token);
@@ -77,8 +76,8 @@ namespace PicacgMangaDownloader.Model
             }
             try
             {
-                var user = await Picacg.SendRequest<User>("users/profile", Token);
-
+                var node = await Picacg.SendRequest<JsonNode>("users/profile", Token);
+                var user = JsonSerializer.Deserialize<User>(node["user"]);
                 this.UserId = user.UserId;
                 this.UserName = user.UserName;
                 this.Email = user.Email;
@@ -113,7 +112,7 @@ namespace PicacgMangaDownloader.Model
                     var nextList = await GetComicListAsync(i);
                     comicInfos.AddRange(nextList.Comics ?? []);
                 }
-                return comicInfos.ToArray();
+                return comicInfos.Reverse<ComicInfo>().ToArray();
             }
             else
             {
@@ -131,7 +130,7 @@ namespace PicacgMangaDownloader.Model
             }
             try
             {
-                var node = await Picacg.SendRequest<JsonNode>($"users/favorites?page={page}", Token);
+                var node = await Picacg.SendRequest<JsonNode>($"users/favourite?page={page}", Token);
                 var comicList = JsonSerializer.Deserialize<ComicList>(node["comics"]);
                 return comicList;
             }
