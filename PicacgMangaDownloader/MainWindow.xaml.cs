@@ -14,6 +14,7 @@ namespace PicacgMangaDownloader
     /// </summary>
     public partial class MainWindow : Window
     {
+        // TODO: 绑定UI控件加载状态到属性 测试进度条
         public MainWindow()
         {
             InitializeComponent();

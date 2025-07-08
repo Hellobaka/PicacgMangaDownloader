@@ -45,6 +45,7 @@ namespace PicacgMangaDownloader.Model
             }
             try
             {
+                // TODO: Auto Retry
                 Directory.CreateDirectory(Path.GetDirectoryName(FileSavePath));
                 (Stream stream, long fileLength) = await Picacg.DownloadStream(Url);
                 using (stream)
