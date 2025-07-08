@@ -306,7 +306,7 @@ namespace PicacgMangaDownloader.Model
 
         public double Percentage => EpisodeTotalCount > 0 ? (double)EpisodeFinishedCount / EpisodeTotalCount * 100 : 0.0;
 
-        public bool GettingEpisode { get; set; } = true;
+        public bool GettingEpisode { get; set; }
 
         public bool GettingEpisodeHasError { get; set; }
 
@@ -323,9 +323,11 @@ namespace PicacgMangaDownloader.Model
                     GettingEpisode = true;
                     GettingEpisodeHasError = false;
                     await Comic.GetEpisodes(user);
+                    OnPropertyChanged(nameof(Comic));
+
                     UnsubscribeEpisodeChanged();
                     Episodes = [];
-                    foreach (var ep in Comic.Episodes)
+                    foreach (var ep in Comic.Episodes.OrderBy(x => x.EpisodeOrder))
                     {
                         ep.ComicId = Comic.ComicId;
                         var epWrapper = new ComicEpisodeWrapper()
@@ -357,6 +359,7 @@ namespace PicacgMangaDownloader.Model
                         Episodes.Add(epWrapper);
                     }
                     SubscribeEpisodeChanged();
+                    OnPropertyChanged(nameof(Episodes));
                 }
             }
             catch (Exception e)

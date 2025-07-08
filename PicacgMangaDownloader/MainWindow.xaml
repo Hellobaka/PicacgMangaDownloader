@@ -10,7 +10,7 @@
     xmlns:model="clr-namespace:PicacgMangaDownloader.Model"
     xmlns:viewmodel="clr-namespace:PicacgMangaDownloader.ViewModel"
     Title="MainWindow"
-    Width="900"
+    Width="1000"
     Height="700"
     d:DataContext="{d:DesignInstance Type=viewmodel:DownloadViewModel}"
     Loaded="Window_Loaded"
@@ -126,6 +126,7 @@
             ItemsSource="{Binding Comics}"
             RowDetailsVisibilityMode="VisibleWhenSelected"
             RowHeaderWidth="60"
+            SelectedCellsChanged="DataGrid_SelectedCellsChanged"
             SelectionMode="Single">
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn
@@ -214,6 +215,8 @@
                                 <Button
                                     Grid.Column="1"
                                     Margin="10,0"
+                                    Command="{Binding DataContext.GetComicsEpisodeCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    CommandParameter="{Binding}"
                                     Style="{StaticResource ButtonDanger}">
                                     重新拉取
                                 </Button>
@@ -225,13 +228,10 @@
                             ItemsSource="{Binding Episodes}"
                             Visibility="{Binding Episodes, Converter={StaticResource ArrayLengthToVisibilityConverter}}">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Width="70" Header="选中">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                                <DataGridCheckBoxColumn
+                                    Width="70"
+                                    Binding="{Binding Selected, Mode=TwoWay}"
+                                    Header="选中" />
                                 <DataGridTextColumn Binding="{Binding Episode.EpisodeTitle}" Header="标题" />
                                 <DataGridTextColumn Binding="{Binding Episode.EpisodeOrder}" Header="序号" />
                                 <DataGridTextColumn

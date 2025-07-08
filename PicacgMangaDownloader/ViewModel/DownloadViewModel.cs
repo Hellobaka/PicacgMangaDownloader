@@ -19,8 +19,10 @@ namespace PicacgMangaDownloader.ViewModel
             CancelDownloadCommand = new RelayCommand(_ => CancelDownload());
             ComicSelectAllCommand = new RelayCommand(_ => ComicSelectAll());
             ComicSelectRevertCommand = new RelayCommand(_ => ComicSelectRevert());
+            GetComicsEpisodeCommand = new RelayCommand(async (comic) => await GetComicsEpisode(comic));
             Instance = this;
         }
+
         public RelayCommand CancelDownloadCommand { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -61,6 +63,8 @@ namespace PicacgMangaDownloader.ViewModel
         public ObservableCollection<ComicWrapper> Comics { get; set; } = [];
 
         public RelayCommand BrowserOutputPathCommand { get; set; }
+
+        public RelayCommand GetComicsEpisodeCommand { get; set; }
 
         public RelayCommand GetFavoriteComicsCommand { get; set; }
 
@@ -219,6 +223,28 @@ namespace PicacgMangaDownloader.ViewModel
             foreach (var item in Comics)
             {
                 item.Selected = true;
+            }
+        }
+
+        private async Task GetComicsEpisode(object? obj)
+        {
+            if (obj == null || obj is not ComicWrapper comic || comic.Episodes.Count > 0)
+            {
+                return;
+            }
+            if (User == null || !IsLogin)
+            {
+                MainWindow.ShowError("请先登录账号");
+                return;
+            }
+            await comic.GetEpisodes(User);
+            if (comic.GettingEpisodeHasError)
+            {
+                MainWindow.ShowError($"获取漫画 {comic.Comic?.ComicTitle} 章节失败，请稍后重试");
+            }
+            else
+            {
+                MainWindow.ShowInfo($"获取漫画 {comic.Comic?.ComicTitle} 章节列表成功，共 {comic.Episodes.Count} 章");
             }
         }
 

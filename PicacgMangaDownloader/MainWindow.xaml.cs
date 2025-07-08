@@ -70,5 +70,14 @@ namespace PicacgMangaDownloader
 
             return tcs.Task;
         }
+
+        private async void DataGrid_SelectedCellsChanged(object sender, System.Windows.Controls.SelectedCellsChangedEventArgs e)
+        {
+            var cell = e.AddedCells.FirstOrDefault();
+            if (cell.Item is ComicWrapper comic && !comic.GettingEpisodeHasError)
+            {
+                await Dispatcher.InvokeAsync(() => VM.GetComicsEpisodeCommand.Execute(comic));
+            }
+        }
     }
 }
