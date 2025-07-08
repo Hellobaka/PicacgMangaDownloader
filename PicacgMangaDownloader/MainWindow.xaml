@@ -125,13 +125,11 @@
             RowHeaderWidth="60"
             SelectionMode="Single">
             <DataGrid.Columns>
-                <DataGridTemplateColumn Width="70" Header="选中">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                <DataGridCheckBoxColumn
+                    Width="70"
+                    Binding="{Binding Selected}"
+                    Header="选中" />
+
                 <DataGridTextColumn
                     Width="auto"
                     Binding="{Binding Comic.ComicTitle}"

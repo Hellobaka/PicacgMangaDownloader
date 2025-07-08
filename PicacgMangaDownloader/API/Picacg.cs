@@ -51,7 +51,7 @@ namespace PicacgMangaDownloader.API
             var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             if (response.IsSuccessStatusCode)
             {
-                return (await response.Content.ReadAsStreamAsync(), response.Content.Headers?.ContentRange?.Length ?? 0);
+                return (await response.Content.ReadAsStreamAsync(), response.Content.Headers?.ContentLength ?? 0);
             }
             else
             {

@@ -311,17 +311,20 @@ namespace PicacgMangaDownloader.Model
         DownloadFailed
     }
 
-    [AddINotifyPropertyChangedInterface]
-    public class ComicWrapper
+    public class ComicWrapper : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public ComicInfo? Comic { get; set; }
 
-        [AlsoNotifyFor("EpisodeFinishedCount", "EpisodeTotalCount", "Percentage")]
         public ObservableCollection<ComicEpisodeWrapper> Episodes { get; set; } = [];
 
         public bool Selected { get; set; }
 
-        public DownloadStatus Downloading { get; set; } = Model.DownloadStatus.NotDownloaded;
+        public DownloadStatus Downloading => Episodes.Count > 0 ? (Episodes.Any(x => x.Downloading == Model.DownloadStatus.Downloading) ? Model.DownloadStatus.Downloading :
+            Episodes.All(x => x.Downloading == Model.DownloadStatus.Downloaded) ? Model.DownloadStatus.Downloaded :
+            Episodes.Any(x => x.Downloading == Model.DownloadStatus.DownloadFailed) ? Model.DownloadStatus.DownloadFailed :
+            Model.DownloadStatus.NotDownloaded) : Model.DownloadStatus.NotDownloaded;
 
         public string DownloadStatus => Downloading switch
         {
@@ -331,6 +334,7 @@ namespace PicacgMangaDownloader.Model
             _ => "未开始",
         };
 
+        [AlsoNotifyFor("EpisodeTotalCount", "Percentage", "Downloading", "DownloadStatus")]
         public int EpisodeFinishedCount => Episodes.Count(x => x.TotalCount == (x.Failed + x.DownloadedCount));
 
         public int EpisodeTotalCount => Episodes.Count;
@@ -342,6 +346,7 @@ namespace PicacgMangaDownloader.Model
             if (Episodes.Count == 0)
             {
                 await Comic.GetEpisodes(user);
+                UnsubscribeEpisodeChanged();
                 Episodes = [];
                 foreach (var ep in Comic.Episodes)
                 {
@@ -365,24 +370,58 @@ namespace PicacgMangaDownloader.Model
                     epWrapper.Subscribe();
                     Episodes.Add(epWrapper);
                 }
+                SubscribeEpisodeChanged();
             }
+        }
+
+        public void SubscribeEpisodeChanged()
+        {
+            foreach (var ep in Episodes)
+            {
+                ep.PropertyChanged -= Ep_PropertyChanged;
+                ep.PropertyChanged += Ep_PropertyChanged;
+            }
+        }
+
+        private void Ep_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(Episodes));
+            OnPropertyChanged(nameof(EpisodeFinishedCount));
+            OnPropertyChanged(nameof(Percentage));
+            OnPropertyChanged(nameof(EpisodeTotalCount));
+            OnPropertyChanged(nameof(Downloading));
+            OnPropertyChanged(nameof(DownloadStatus));
+        }
+
+        public void UnsubscribeEpisodeChanged()
+        {
+            foreach (var ep in Episodes)
+            {
+                ep.PropertyChanged -= Ep_PropertyChanged;
+            }
+        }
+
+        private protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 
-    [AddINotifyPropertyChangedInterface]
-    public class ComicEpisodeWrapper
+    public class ComicEpisodeWrapper : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public string ComicTitle { get; set; } = string.Empty;
 
         public ComicEpisode? Episode { get; set; }
 
-        [AlsoNotifyFor("Failed", "DownloadedCount", "TotalCount", "Percentage")]
         public ObservableCollection<ComicPageWrapper> Pages { get; set; } = [];
 
         public bool Selected { get; set; }
 
         public int Failed => Pages.Count(x => x.Downloading == Model.DownloadStatus.DownloadFailed);
 
+        [AlsoNotifyFor("Failed", "TotalCount", "Percentage", "DownloadStatus")]
         public int DownloadedCount => Pages.Count(x => x.Downloading == Model.DownloadStatus.Downloaded);
 
         public int TotalCount => Pages.Count;
@@ -432,6 +471,8 @@ namespace PicacgMangaDownloader.Model
                         try
                         {
                             await task.StartAsync(token);
+                            OnPropertyChanged(nameof(DownloadedCount));
+                            OnPropertyChanged(nameof(Percentage));
                         }
                         catch (OperationCanceledException)
                         {
@@ -475,21 +516,35 @@ namespace PicacgMangaDownloader.Model
         {
             foreach (var page in Pages)
             {
+                page.PropertyChanged -= Page_PropertyChanged;
+                page.PropertyChanged += Page_PropertyChanged;
                 page.SubscribeDownloadProgress();
             }
+        }
+
+        private void Page_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(Pages));
+            OnPropertyChanged(nameof(DownloadedCount));
         }
 
         public void Unsubscribe()
         {
             foreach (var page in Pages)
             {
+                page.PropertyChanged -= Page_PropertyChanged;
                 page.UnsubscribeDownloadProgress();
             }
+        }
+
+        private protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 
     [AddINotifyPropertyChangedInterface]
-    public class ComicPageWrapper
+    public class ComicPageWrapper : INotifyPropertyChanged
     {
         public ComicPage? Page { get; set; }
 
@@ -564,5 +619,12 @@ namespace PicacgMangaDownloader.Model
         {
             Downloading = Model.DownloadStatus.Downloaded;
         }
+
+        private protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }
