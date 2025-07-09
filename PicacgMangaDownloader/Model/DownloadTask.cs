@@ -23,12 +23,18 @@ namespace PicacgMangaDownloader.Model
 
         public CancellationTokenSource CancellationToken { get; set; } = new();
 
-        public Task? _DownloadTask { get; set; }
+        public int RetryCount { get; set; } = 0;
 
-        public bool IsActive => _DownloadTask != null && !_DownloadTask.IsCompleted;
+        public int MaxRetry { get; set; } = 3;
 
-        public async Task StartAsync(CancellationToken token)
+        public DownloadStatus DownloadStatus { get; set; } = DownloadStatus.NotDownloaded;
+
+        public async Task StartAsync(CancellationToken token, bool force = false)
         {
+            if (DownloadStatus == DownloadStatus.Downloaded && !force)
+            {
+                return;
+            }
             await DownloadStreamToFile(token);
         }
 
@@ -43,80 +49,91 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new ArgumentException("DownloadTask must have a valid Url and FileSavePath.");
             }
-            try
+            DownloadStatus = DownloadStatus.Downloading;
+            RetryCount = 0;
+            while (RetryCount < MaxRetry && !token.IsCancellationRequested)
             {
-                // TODO: Auto Retry
-                Directory.CreateDirectory(Path.GetDirectoryName(FileSavePath));
-                (Stream stream, long fileLength) = await Picacg.DownloadStream(Url);
-                using (stream)
-                using (FileStream fileStream = new(FileSavePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                try
                 {
-                    TotalBytes = fileLength;
-                    DownloadedBytes = 0;
-                    var buffer = new byte[81920];
-                    long totalRead = 0;
-                    int read;
-                    var lastReport = DateTime.Now;
-                    while (true)
+                    Directory.CreateDirectory(Path.GetDirectoryName(FileSavePath));
+                    (Stream stream, long fileLength) = await Picacg.DownloadStream(Url);
+                    using (stream)
+                    using (FileStream fileStream = new(FileSavePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
+                        TotalBytes = fileLength;
+                        DownloadedBytes = 0;
+                        var buffer = new byte[81920];
+                        long totalRead = 0;
+                        int read;
+                        var lastReport = DateTime.Now;
+                        while (true)
+                        {
+                            if (token.IsCancellationRequested)
+                            {
+                                Fail();
+                                return;
+                            }
+                            var readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
+                            if (await Task.WhenAny(readTask, Task.Delay(ReadBytesTimeout, token)) == readTask)
+                            {
+                                read = readTask.Result;
+                                if (read == 0)
+                                {
+                                    break;
+                                }
+                                await fileStream.WriteAsync(buffer.AsMemory(0, read), token);
+                                totalRead += read;
+                            }
+                            else
+                            {
+                                throw new TimeoutException($"从流读取字节超时！");
+                            }
+                            if (fileLength > 0 && (DateTime.Now - lastReport).TotalMilliseconds > 100)
+                            {
+                                UpdateProgress(totalRead, fileLength);
+                                lastReport = DateTime.Now;
+                            }
+                        }
+                        // 循环外再回调一次，确保100%
+                        UpdateProgress(totalRead, fileLength);
                         if (token.IsCancellationRequested)
                         {
                             Fail();
                             return;
                         }
-                        var readTask = stream.ReadAsync(buffer, 0, buffer.Length, token);
-                        if (await Task.WhenAny(readTask, Task.Delay(ReadBytesTimeout, token)) == readTask)
+                        if (totalRead == fileLength)
                         {
-                            read = readTask.Result;
-                            if (read == 0)
-                            {
-                                break;
-                            }
-                            await fileStream.WriteAsync(buffer.AsMemory(0, read), token);
-                            totalRead += read;
+                            Complete();
+                            return;
                         }
                         else
                         {
-                            throw new TimeoutException($"从流读取字节超时！");
-                        }
-                        if (fileLength > 0 && (DateTime.Now - lastReport).TotalMilliseconds > 100)
-                        {
-                            UpdateProgress(totalRead, fileLength);
-                            lastReport = DateTime.Now;
+                            throw new IOException($"下载的文件大小与预期不符: {totalRead} != {fileLength}");
                         }
                     }
-                    // 循环外再回调一次，确保100%
-                    UpdateProgress(totalRead, fileLength);
-                    if (token.IsCancellationRequested)
+                }
+                catch (Exception ex)
+                {
+                    RetryCount++;
+                    if (RetryCount < MaxRetry && !token.IsCancellationRequested)
                     {
-                        Fail();
-                        return;
-                    }
-                    if (totalRead == fileLength)
-                    {
-                        Complete();
-                    }
-                    else
-                    {
-                        Fail();
+                        await Task.Delay(3000, token);
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving stream to file: {ex.Message}");
-                Fail();
-            }
+            Fail();
         }
 
         public void Complete()
         {
             OnCompleted?.Invoke(this);
+            DownloadStatus = DownloadStatus.Downloaded;
         }
 
         public void Fail()
         {
             OnFailed?.Invoke(this);
+            DownloadStatus = DownloadStatus.DownloadFailed;
         }
 
         public void UpdateProgress(long downloadedBytes, long totalBytes)
