@@ -38,7 +38,7 @@ namespace PicacgMangaDownloader.ViewModel
         [AlsoNotifyFor("IsLogin", "DisplayedUserName")]
         public User? User { get; set; }
 
-        public string DisplayedUserName => string.IsNullOrEmpty(User?.UserName) ? "未登录" : User.UserName;
+        public string DisplayedUserName => string.IsNullOrEmpty(User?.UserName) ? "未登录" : $"{User.UserName} Lv.{User.Level} Exp: {User.Exp}";
 
         public bool IsLogin => User?.IsLogin ?? false;
 
@@ -48,15 +48,19 @@ namespace PicacgMangaDownloader.ViewModel
 
         public bool Logining { get; set; } = false;
 
-        public bool Downloading { get; set; } = false;
+        public bool Downloading { get; set; }
 
         public int LoginType { get; set; }
 
-        public int MaxParallelDownloads { get; set; } = 6;
+        public bool GettingFavoriteComics { get; set; }
 
-        public int ComicTotalCount => Comics.Count;
+        public int MaxParallelDownloads { get; set; } = 50;
 
-        public int ComicFinishedCount => Comics.Count(x => x.EpisodeTotalCount != 0 && x.EpisodeFinishedCount == x.EpisodeTotalCount);
+        public SemaphoreSlim DownloadThrottler { get; set; }
+
+        public int ComicTotalCount { get; set; }
+
+        public int ComicFinishedCount { get; set; }
 
         public double Percentage => ComicTotalCount == 0 ? 0 : (double)ComicFinishedCount / ComicTotalCount * 100;
 
@@ -92,22 +96,44 @@ namespace PicacgMangaDownloader.ViewModel
 
         private async Task GetFavoriteComics()
         {
-            var comics = await User.GetFavoriteComics();
-            foreach (var item in Comics.SelectMany(x => x.Episodes))
+            try
             {
-                item.Unsubscribe();
-            }
-            Comics = [];
-            foreach (var comic in comics)
-            {
-                Comics.Add(new ComicWrapper
+                GettingFavoriteComics = true;
+                if (User == null || !IsLogin)
                 {
-                    Comic = comic,
-                    Episodes = [],
-                    Selected = false
-                });
+                    MainWindow.ShowError("请先登录账号");
+                    return;
+                }
+                if (Downloading)
+                {
+                    MainWindow.ShowError("下载过程不可重新获取收藏列表");
+                    return;
+                }
+                var comics = await User.GetFavoriteComics();
+                foreach (var item in Comics.SelectMany(x => x.Episodes))
+                {
+                    item.Unsubscribe();
+                }
+                Comics = [];
+                foreach (var comic in comics)
+                {
+                    Comics.Add(new ComicWrapper
+                    {
+                        Comic = comic,
+                        Episodes = [],
+                        Selected = false
+                    });
+                }
+                SaveConfig();
             }
-            SaveConfig();
+            catch (Exception e)
+            {
+                MainWindow.ShowError($"获取收藏列表时发生错误：{e.Message}");
+            }
+            finally
+            {
+                GettingFavoriteComics = false;
+            }
         }
 
         private void BrowserOutputPath()
@@ -145,39 +171,59 @@ namespace PicacgMangaDownloader.ViewModel
                 MainWindow.ShowError("请先登录账号");
                 return;
             }
-            if (Downloading)
-            {
-                if (await MainWindow.ShowConfirmAsync("当前有下载任务正在进行，是否取消所有下载任务？"))
-                {
-                    CancelDownload();
-                }
-                return;
-            }
+            DownloadThrottler?.Dispose();
 
+            DownloadThrottler = new(MaxParallelDownloads);
             Directory.CreateDirectory(DownloadPath);
             int index = 1;
-            foreach (var comic in Comics.Where(x => x.Selected))
+            try
             {
-                if (comic.Comic == null)
+                Downloading = true;
+                var selectedComics = Comics.Where(x => x.Selected).ToList();
+                ComicTotalCount = selectedComics.Count;
+                ComicFinishedCount = 0;
+                foreach (var comic in selectedComics)
                 {
-                    MainWindow.ShowError($"漫画索引 {index} 信息不完整，无法下载");
-                    continue;
-                }
-
-                // await comic.Comic.GetMoreInformation(User);
-                if (comic.Episodes.Count == 0)
-                {
-                    await comic.GetEpisodes(User);
-                    if (comic.Episodes.Count == 0)
+                    if (comic.Comic == null)
                     {
-                        MainWindow.ShowError($"漫画 {comic.Comic.ComicTitle} 没有可下载的章节");
+                        MainWindow.ShowError($"漫画索引 {index} 信息不完整，无法下载");
                         continue;
                     }
+
+                    // await comic.Comic.GetMoreInformation(User);
+                    if (comic.Episodes.Count == 0)
+                    {
+                        await comic.GetEpisodes(User, false);
+                        if (comic.Episodes.Count == 0)
+                        {
+                            MainWindow.ShowError($"漫画 {comic.Comic.ComicTitle} 没有可下载的章节");
+                            continue;
+                        }
+                    }
+                    // 启动所有章节下载
+                    var tasks = comic.Episodes.Where(x => x.Selected).Select(ep => ep.StartDownload());
+                    OnPropertyChanged(nameof(Downloading));
+                    await Task.WhenAll(tasks);
+
+                    index++;
+                    ComicFinishedCount++;
+                    if (comic.Downloading == DownloadStatus.Downloaded)
+                    {
+                        comic.Selected = false;
+                    }
+                    OnPropertyChanged(nameof(Downloading));
+                    OnPropertyChanged(nameof(ComicTotalCount));
+                    OnPropertyChanged(nameof(ComicFinishedCount));
+                    OnPropertyChanged(nameof(Percentage));
                 }
-                // 启动所有章节下载
-                var tasks = comic.Episodes.Where(x => x.Selected).Select(ep => ep.StartDownload());
-                await Task.WhenAll(tasks);
-                index++;
+            }
+            catch (Exception e)
+            {
+                MainWindow.ShowError($"下载过程中发生错误：{e.Message}");
+            }
+            finally
+            {
+                Downloading = false;
             }
         }
 
@@ -228,7 +274,7 @@ namespace PicacgMangaDownloader.ViewModel
 
         private async Task GetComicsEpisode(object? obj)
         {
-            if (obj == null || obj is not ComicWrapper comic || comic.Episodes.Count > 0)
+            if (obj == null || obj is not ComicWrapper comic)
             {
                 return;
             }
@@ -237,7 +283,7 @@ namespace PicacgMangaDownloader.ViewModel
                 MainWindow.ShowError("请先登录账号");
                 return;
             }
-            await comic.GetEpisodes(User);
+            await comic.GetEpisodes(User, true);
             if (comic.GettingEpisodeHasError)
             {
                 MainWindow.ShowError($"获取漫画 {comic.Comic?.ComicTitle} 章节失败，请稍后重试");

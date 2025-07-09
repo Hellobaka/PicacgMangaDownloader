@@ -6,7 +6,7 @@
     xmlns:local="clr-namespace:PicacgMangaDownloader"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewmodel="clr-namespace:PicacgMangaDownloader.ViewModel"
-    Title="Login"
+    Title="登录"
     Width="450"
     Height="352"
     d:DataContext="{d:DesignInstance Type=viewmodel:DownloadViewModel}"

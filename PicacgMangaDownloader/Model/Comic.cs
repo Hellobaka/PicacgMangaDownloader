@@ -184,7 +184,7 @@ namespace PicacgMangaDownloader.Model
             {
                 throw new InvalidOperationException("ComicId must be set before fetching episodes.");
             }
-
+            Episodes = [];
             var episode = await GetComicEpisodes(1, user.Token);
             if (episode == null || episode.Eps == null || episode.Eps.Length == 0)
             {
@@ -310,7 +310,7 @@ namespace PicacgMangaDownloader.Model
 
         public bool GettingEpisodeHasError { get; set; }
 
-        public async Task GetEpisodes(User user)
+        public async Task GetEpisodes(User user, bool force)
         {
             if (Comic == null || string.IsNullOrEmpty(Comic.ComicId) || string.IsNullOrEmpty(Comic.ComicTitle) || user == null || string.IsNullOrEmpty(user.Token))
             {
@@ -318,10 +318,10 @@ namespace PicacgMangaDownloader.Model
             }
             try
             {
-                if (Episodes.Count == 0)
+                GettingEpisode = true;
+                GettingEpisodeHasError = false;
+                if (Episodes.Count == 0 || force)
                 {
-                    GettingEpisode = true;
-                    GettingEpisodeHasError = false;
                     await Comic.GetEpisodes(user);
                     OnPropertyChanged(nameof(Comic));
 
@@ -360,6 +360,8 @@ namespace PicacgMangaDownloader.Model
                     }
                     SubscribeEpisodeChanged();
                     OnPropertyChanged(nameof(Episodes));
+                    OnPropertyChanged(nameof(EpisodeFinishedCount));
+                    OnPropertyChanged(nameof(EpisodeTotalCount));
                 }
             }
             catch (Exception e)
@@ -454,10 +456,9 @@ namespace PicacgMangaDownloader.Model
                 ComicTitle ?? string.Empty,
                 DownloadViewModel.Instance.KeepEpisodeTitle ? (Episode?.EpisodeTitle ?? string.Empty) : (Episode?.EpisodeOrder?.ToString() ?? string.Empty));
 
-            var throttler = new SemaphoreSlim(DownloadViewModel.Instance.MaxParallelDownloads);
             var tasks = Pages.Select(async page =>
             {
-                await throttler.WaitAsync(token);
+                await DownloadViewModel.Instance.DownloadThrottler.WaitAsync(token);
                 try
                 {
                     if (token.IsCancellationRequested)
@@ -481,7 +482,7 @@ namespace PicacgMangaDownloader.Model
                 }
                 finally
                 {
-                    throttler.Release();
+                    DownloadViewModel.Instance.DownloadThrottler.Release();
                 }
             });
             try
