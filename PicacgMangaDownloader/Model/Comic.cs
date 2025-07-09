@@ -454,13 +454,14 @@ namespace PicacgMangaDownloader.Model
             var token = DownloadCancelToken.Token;
             this.Downloading = Model.DownloadStatus.Downloading;
 
-            string episodeFolder = Path.Combine(
-                ComicTitle ?? string.Empty,
-                DownloadViewModel.Instance.KeepEpisodeTitle ? (Episode?.EpisodeTitle ?? string.Empty) : (Episode?.EpisodeOrder?.ToString() ?? string.Empty));
+            string comicTitle = ComicTitle ?? string.Empty;
+            string epTitle = DownloadViewModel.Instance.KeepEpisodeTitle ? (Episode?.EpisodeTitle ?? string.Empty) : (Episode?.EpisodeOrder?.ToString() ?? string.Empty);
             Path.GetInvalidPathChars().Concat(Path.GetInvalidFileNameChars()).ToList().ForEach(c =>
             {
-                episodeFolder = episodeFolder.Replace(c, '_');
+                comicTitle = comicTitle.Replace(c, '_');
+                epTitle = epTitle.Replace(c, '_');
             });
+            string episodeFolder = Path.Combine(comicTitle, epTitle);
             var tasks = Pages.Select(async page =>
             {
                 await DownloadViewModel.Instance.DownloadThrottler.WaitAsync(token);
