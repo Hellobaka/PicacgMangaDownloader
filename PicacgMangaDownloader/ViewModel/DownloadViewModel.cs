@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using PicacgMangaDownloader.API;
 using PicacgMangaDownloader.Model;
 using PropertyChanged;
 using System.Collections.ObjectModel;
@@ -23,75 +24,174 @@ namespace PicacgMangaDownloader.ViewModel
             Instance = this;
         }
 
-        public RelayCommand CancelDownloadCommand { get; set; }
-
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        public string? Username { get; set; }
-
-        public string? Password { get; set; }
-
-        public string? Token { get; set; }
-
-        public string? DownloadPath { get; set; }
-
-        [AlsoNotifyFor("IsLogin", "DisplayedUserName")]
-        public User? User { get; set; }
-
-        public string DisplayedUserName => string.IsNullOrEmpty(User?.UserName) ? "未登录" : $"{User.UserName} Lv.{User.Level} Exp: {User.Exp}";
-
-        public bool IsLogin => User?.IsLogin ?? false;
-
-        public bool KeepEpisodeTitle { get; set; }
-
-        public bool DryRun { get; set; }
-
-        public bool Logining { get; set; } = false;
-
-        public bool Downloading { get; set; }
-
-        public int LoginType { get; set; }
-
-        public bool GettingFavoriteComics { get; set; }
-
-        public int MaxParallelDownloads { get; set; } = 50;
-
-        public SemaphoreSlim DownloadThrottler { get; set; }
-
-        public int ComicTotalCount { get; set; }
-
-        public int ComicFinishedCount { get; set; }
-
-        public double Percentage => ComicTotalCount == 0 ? 0 : (double)ComicFinishedCount / ComicTotalCount * 100;
-
-        public ObservableCollection<ComicWrapper> Comics { get; set; } = [];
+        public static DownloadViewModel Instance { get; set; }
 
         public RelayCommand BrowserOutputPathCommand { get; set; }
 
-        public RelayCommand GetComicsEpisodeCommand { get; set; }
+        public RelayCommand CancelDownloadCommand { get; set; }
 
-        public RelayCommand GetFavoriteComicsCommand { get; set; }
+        public int ComicFinishedCount { get; set; }
 
-        public RelayCommand StartDownloadCommand { get; set; }
-
-        public RelayCommand OpenLoginCommand { get; set; }
+        public ObservableCollection<ComicWrapper> Comics { get; set; } = [];
 
         public RelayCommand ComicSelectAllCommand { get; set; }
 
         public RelayCommand ComicSelectRevertCommand { get; set; }
 
-        public static DownloadViewModel Instance { get; set; }
+        public int ComicTotalCount { get; set; }
+
+        public string DisplayedUserName => string.IsNullOrEmpty(User?.UserName) ? "未登录" : $"{User.UserName} Lv.{User.Level} Exp: {User.Exp}";
+
+        public bool Downloading { get; set; }
+
+        public string? DownloadPath { get; set; }
+
+        public SemaphoreSlim DownloadThrottler { get; set; }
+
+        public bool DryRun { get; set; }
+
+        public RelayCommand GetComicsEpisodeCommand { get; set; }
+
+        public RelayCommand GetFavoriteComicsCommand { get; set; }
+
+        public bool GettingFavoriteComics { get; set; }
+
+        public bool IsLogin => User?.IsLogin ?? false;
+
+        public bool KeepEpisodeTitle { get; set; }
+
+        public bool Logining { get; set; } = false;
+
+        public int LoginType { get; set; }
+
+        public int MaxParallelDownloads { get; set; } = 50;
+
+        public RelayCommand OpenLoginCommand { get; set; }
+
+        public string? Password { get; set; }
+
+        public double Percentage => ComicTotalCount == 0 ? 0 : (double)ComicFinishedCount / ComicTotalCount * 100;
+
+        public RelayCommand StartDownloadCommand { get; set; }
+
+        public string? Token { get; set; }
+
+        [AlsoNotifyFor("IsLogin", "DisplayedUserName")]
+        public User? User { get; set; }
+
+        public string? Username { get; set; }
+
+        public async Task<bool> Login()
+        {
+            try
+            {
+                Logining = true;
+                var result = LoginType switch
+                {
+                    1 => await LoginByToken(),
+                    _ => await LoginByPassword(),
+                };
+                if (result)
+                {
+                    OnPropertyChanged(nameof(IsLogin));
+                    OnPropertyChanged(nameof(DisplayedUserName));
+                    OnPropertyChanged(nameof(User));
+
+                    SaveConfig();
+                }
+                return result;
+            }
+            catch { }
+            finally
+            {
+                Logining = false;
+            }
+
+            return false;
+        }
+
+        public void SaveConfig()
+        {
+            File.WriteAllText("Config.json", JsonSerializer.Serialize(new
+            {
+                Comics,
+                User,
+                DownloadPath,
+                UseProxy = Picacg.UseProxy,
+                HttpProxy = Picacg.HttpProxy,
+            }), System.Text.Encoding.UTF8);
+        }
 
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        private void OpenLogin()
+        private void BrowserOutputPath()
         {
-            Login login = new();
-            login.DataContext = this;
-            login.ShowDialog();
+            var dialog = new OpenFolderDialog
+            {
+                Title = "选择下载漫画要保存的位置",
+            };
+            if (dialog.ShowDialog() ?? false)
+            {
+                DownloadPath = dialog.FolderName;
+                SaveConfig();
+            }
+        }
+
+        /// <summary>
+        /// 取消所有正在下载的章节
+        /// </summary>
+        private void CancelDownload()
+        {
+            foreach (var comic in Comics)
+            {
+                foreach (var ep in comic.Episodes)
+                {
+                    _ = ep.StopDownload();
+                }
+            }
+        }
+
+        private void ComicSelectAll()
+        {
+            foreach (var item in Comics)
+            {
+                item.Selected = true;
+            }
+        }
+
+        private void ComicSelectRevert()
+        {
+            foreach (var item in Comics)
+            {
+                item.Selected = !item.Selected;
+            }
+        }
+
+        private async Task GetComicsEpisode(object? obj)
+        {
+            if (obj == null || obj is not ComicWrapper comic)
+            {
+                return;
+            }
+            if (User == null || !IsLogin)
+            {
+                MainWindow.ShowError("请先登录账号");
+                return;
+            }
+            await comic.GetEpisodes(User, true);
+            if (comic.GettingEpisodeHasError)
+            {
+                MainWindow.ShowError($"获取漫画 {comic.Comic?.ComicTitle} 章节失败，请稍后重试");
+            }
+            else
+            {
+                MainWindow.ShowInfo($"获取漫画 {comic.Comic?.ComicTitle} 章节列表成功，共 {comic.Episodes.Count} 章");
+            }
         }
 
         private async Task GetFavoriteComics()
@@ -136,17 +236,26 @@ namespace PicacgMangaDownloader.ViewModel
             }
         }
 
-        private void BrowserOutputPath()
+        private async Task<bool> LoginByPassword()
         {
-            var dialog = new OpenFolderDialog
+            User = new();
+            return await User.Login(Username, Password) && await User.UpdateProfile();
+        }
+
+        private async Task<bool> LoginByToken()
+        {
+            User = new()
             {
-                Title = "选择下载漫画要保存的位置",
+                Token = Token
             };
-            if (dialog.ShowDialog() ?? false)
-            {
-                DownloadPath = dialog.FolderName;
-                SaveConfig();
-            }
+            return await User.UpdateProfile();
+        }
+
+        private void OpenLogin()
+        {
+            Login login = new();
+            login.DataContext = this;
+            login.ShowDialog();
         }
 
         private async void StartDownload()
@@ -225,112 +334,6 @@ namespace PicacgMangaDownloader.ViewModel
             {
                 Downloading = false;
             }
-        }
-
-        /// <summary>
-        /// 取消所有正在下载的章节
-        /// </summary>
-        private void CancelDownload()
-        {
-            foreach (var comic in Comics)
-            {
-                foreach (var ep in comic.Episodes)
-                {
-                    _ = ep.StopDownload();
-                }
-            }
-        }
-
-        private async Task<bool> LoginByToken()
-        {
-            User = new()
-            {
-                Token = Token
-            };
-            return await User.UpdateProfile();
-        }
-
-        private async Task<bool> LoginByPassword()
-        {
-            User = new();
-            return await User.Login(Username, Password) && await User.UpdateProfile();
-        }
-
-        private void ComicSelectRevert()
-        {
-            foreach (var item in Comics)
-            {
-                item.Selected = !item.Selected;
-            }
-        }
-
-        private void ComicSelectAll()
-        {
-            foreach (var item in Comics)
-            {
-                item.Selected = true;
-            }
-        }
-
-        private async Task GetComicsEpisode(object? obj)
-        {
-            if (obj == null || obj is not ComicWrapper comic)
-            {
-                return;
-            }
-            if (User == null || !IsLogin)
-            {
-                MainWindow.ShowError("请先登录账号");
-                return;
-            }
-            await comic.GetEpisodes(User, true);
-            if (comic.GettingEpisodeHasError)
-            {
-                MainWindow.ShowError($"获取漫画 {comic.Comic?.ComicTitle} 章节失败，请稍后重试");
-            }
-            else
-            {
-                MainWindow.ShowInfo($"获取漫画 {comic.Comic?.ComicTitle} 章节列表成功，共 {comic.Episodes.Count} 章");
-            }
-        }
-
-        public async Task<bool> Login()
-        {
-            try
-            {
-                Logining = true;
-                var result = LoginType switch
-                {
-                    1 => await LoginByToken(),
-                    _ => await LoginByPassword(),
-                };
-                if (result)
-                {
-                    OnPropertyChanged(nameof(IsLogin));
-                    OnPropertyChanged(nameof(DisplayedUserName));
-                    OnPropertyChanged(nameof(User));
-
-                    SaveConfig();
-                }
-                return result;
-            }
-            catch { }
-            finally
-            {
-                Logining = false;
-            }
-
-            return false;
-        }
-
-        private void SaveConfig()
-        {
-            File.WriteAllText("Config.json", JsonSerializer.Serialize(new
-            {
-                Comics,
-                User,
-                DownloadPath
-            }), System.Text.Encoding.UTF8);
         }
     }
 }

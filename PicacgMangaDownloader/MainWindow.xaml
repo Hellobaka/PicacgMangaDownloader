@@ -36,14 +36,22 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="auto" />
                 <ColumnDefinition Width="auto" />
+                <ColumnDefinition Width="auto" />
             </Grid.ColumnDefinitions>
             <TextBlock VerticalAlignment="Center">已登录用户：</TextBlock>
             <TextBlock
                 Grid.Column="1"
                 VerticalAlignment="Center"
                 Text="{Binding DisplayedUserName}" />
-            <ToggleButton
+            <Button
                 Grid.Column="2"
+                Width="70"
+                Click="OpenProxyConfig_Click"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}">
+                代理设置
+            </Button>
+            <ToggleButton
+                Grid.Column="3"
                 Width="120"
                 Margin="10,0"
                 HorizontalAlignment="Stretch"
@@ -53,7 +61,7 @@
                 IsEnabled="{Binding GettingFavoriteComics, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Style="{StaticResource ToggleButtonLoading}" />
             <Button
-                Grid.Column="3"
+                Grid.Column="4"
                 Width="70"
                 Command="{Binding OpenLoginCommand}"
                 IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
@@ -218,7 +226,7 @@
                 <DataTemplate>
                     <Grid>
                         <Grid
-                            HorizontalAlignment="Left"
+                            HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Visibility="{Binding GettingEpisode, Converter={StaticResource Boolean2VisibilityConverter}}">
                             <Grid.ColumnDefinitions>
@@ -238,7 +246,7 @@
                                 Text="正在拉取章节数据..." />
                         </Grid>
                         <Grid
-                            HorizontalAlignment="Left"
+                            HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Visibility="{Binding GettingEpisodeHasError, Converter={StaticResource Boolean2VisibilityConverter}}">
                             <Grid.ColumnDefinitions>

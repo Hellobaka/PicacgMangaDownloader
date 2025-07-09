@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -9,13 +10,31 @@ namespace PicacgMangaDownloader.API
     {
         public static string BaseUrl { get; } = "https://picaapi.picacomic.com/";
 
+        public static bool UseProxy { get; set; }
+
+        public static string HttpProxy { get; set; }
+
+        private static HttpClientHandler GetProxyHandler()
+        {
+            if (!UseProxy || string.IsNullOrEmpty(HttpProxy))
+            {
+                return new HttpClientHandler();
+            }
+            var proxy = new WebProxy(HttpProxy);
+            return new HttpClientHandler
+            {
+                Proxy = proxy,
+                UseProxy = true
+            };
+        }
+
         public static async Task<T?> SendRequest<T>(string url, string? authorization = null, object param = null, string method = "GET")
         {
             if (string.IsNullOrEmpty(url))
             {
                 throw new ArgumentException("URL cannot be null or empty.", nameof(url));
             }
-            using HttpClient http = new()
+            using HttpClient http = new(GetProxyHandler())
             {
                 BaseAddress = new Uri(BaseUrl),
             };
@@ -42,7 +61,7 @@ namespace PicacgMangaDownloader.API
 
         public static async Task<(Stream stream, long fileLength)> DownloadStream(string url, string? authorization = null)
         {
-            using HttpClient http = new()
+            using HttpClient http = new(GetProxyHandler())
             {
                 BaseAddress = new Uri(BaseUrl),
             };

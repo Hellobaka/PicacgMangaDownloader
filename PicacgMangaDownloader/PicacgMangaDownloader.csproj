@@ -7,6 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Resources\ico.ico</ApplicationIcon>
+    <Version>1.1.0</Version>
+    <Authors>Hellobaka</Authors>
   </PropertyGroup>
 
   <ItemGroup>

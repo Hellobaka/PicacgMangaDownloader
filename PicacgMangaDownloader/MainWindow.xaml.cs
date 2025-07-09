@@ -1,4 +1,5 @@
-﻿using PicacgMangaDownloader.Model;
+﻿using PicacgMangaDownloader.API;
+using PicacgMangaDownloader.Model;
 using PicacgMangaDownloader.ViewModel;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -36,6 +37,9 @@ namespace PicacgMangaDownloader
                     VM.DownloadPath = node?["DownloadPath"]?.ToString();
 
                     VM.LoginType = string.IsNullOrEmpty(VM.Token) ? 0 : 1;
+
+                    Picacg.UseProxy = node?["UseProxy"]?.GetValue<bool>() ?? false;
+                    Picacg.HttpProxy = node?["HttpProxy"]?.ToString() ?? string.Empty;
                 }
                 catch (Exception ex)
                 {
@@ -69,6 +73,22 @@ namespace PicacgMangaDownloader
             });
 
             return tcs.Task;
+        }
+
+        private void OpenProxyConfig_Click(object sender, RoutedEventArgs e)
+        {
+            Proxy proxy = new()
+            {
+                UseProxy = Picacg.UseProxy,
+                ProxyUrl = Picacg.HttpProxy
+            };
+            if (proxy.ShowDialog() == true)
+            {
+                Picacg.UseProxy = proxy.UseProxy;
+                Picacg.HttpProxy = proxy.ProxyUrl;
+
+                VM.SaveConfig();
+            }
         }
     }
 }

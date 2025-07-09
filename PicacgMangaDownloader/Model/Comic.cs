@@ -354,7 +354,7 @@ namespace PicacgMangaDownloader.Model
                         }
                         catch (Exception exc)
                         {
-                            MainWindow.ShowError($"获取 {ep.EpisodeTitle} 图片列表时发生错误：{exc}");
+                            MainWindow.ShowError($"获取 {ep.EpisodeTitle} 图片列表时发生错误：{exc.Message}");
                             throw;
                         }
 
@@ -370,7 +370,7 @@ namespace PicacgMangaDownloader.Model
             catch (Exception e)
             {
                 GettingEpisodeHasError = true;
-                MainWindow.ShowError($"获取 {Comic?.ComicTitle} 章节列表时发生错误：{e}");
+                MainWindow.ShowError($"获取 {Comic?.ComicTitle} 章节列表时发生错误：{e.Message}");
             }
             finally
             {
