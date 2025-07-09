@@ -3,4 +3,5 @@
 - .net9.0
 - 多线程下载
 
-![image](https://github.com/user-attachments/assets/d5cf8174-8a45-4934-a8a4-80a15bae4295)
+![image](https://github.com/user-attachments/assets/659f9381-1212-445a-a67c-bc1cdb0a24b1)
+
