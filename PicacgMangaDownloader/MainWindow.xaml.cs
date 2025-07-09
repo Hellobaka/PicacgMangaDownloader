@@ -14,7 +14,6 @@ namespace PicacgMangaDownloader
     /// </summary>
     public partial class MainWindow : Window
     {
-        // TODO: 绑定UI控件加载状态到属性 测试进度条
         public MainWindow()
         {
             InitializeComponent();
@@ -70,15 +69,6 @@ namespace PicacgMangaDownloader
             });
 
             return tcs.Task;
-        }
-
-        private async void DataGrid_SelectedCellsChanged(object sender, System.Windows.Controls.SelectedCellsChangedEventArgs e)
-        {
-            var cell = e.AddedCells.FirstOrDefault();
-            if (cell.Item is ComicWrapper comic && !comic.GettingEpisodeHasError)
-            {
-                await Dispatcher.InvokeAsync(() => VM.GetComicsEpisodeCommand.Execute(comic));
-            }
         }
     }
 }

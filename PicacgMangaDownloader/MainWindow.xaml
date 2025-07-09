@@ -9,7 +9,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:model="clr-namespace:PicacgMangaDownloader.Model"
     xmlns:viewmodel="clr-namespace:PicacgMangaDownloader.ViewModel"
-    Title="MainWindow"
+    Title="哔咔漫画下载器"
     Width="1000"
     Height="700"
     d:DataContext="{d:DesignInstance Type=viewmodel:DownloadViewModel}"
@@ -42,17 +42,21 @@
                 Grid.Column="1"
                 VerticalAlignment="Center"
                 Text="{Binding DisplayedUserName}" />
-            <Button
+            <ToggleButton
                 Grid.Column="2"
-                Width="100"
+                Width="120"
                 Margin="10,0"
-                Command="{Binding GetFavoriteComicsCommand}">
-                拉取喜欢列表
-            </Button>
+                HorizontalAlignment="Stretch"
+                Command="{Binding GetFavoriteComicsCommand}"
+                Content="拉取收藏列表"
+                IsChecked="{Binding GettingFavoriteComics}"
+                IsEnabled="{Binding GettingFavoriteComics, Converter={StaticResource Boolean2BooleanReConverter}}"
+                Style="{StaticResource ToggleButtonLoading}" />
             <Button
                 Grid.Column="3"
                 Width="70"
                 Command="{Binding OpenLoginCommand}"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Style="{StaticResource ButtonPrimary}">
                 重新登录
             </Button>
@@ -68,12 +72,14 @@
                 Grid.Column="1"
                 Margin="0,0,10,0"
                 VerticalAlignment="Center"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Text="{Binding DownloadPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             <Button
                 Grid.Column="2"
                 Width="70"
                 HorizontalAlignment="Right"
                 Command="{Binding BrowserOutputPathCommand}"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Style="{StaticResource ButtonPrimary}">
                 浏览
             </Button>
@@ -91,13 +97,25 @@
                     Margin="0,0,10,0"
                     HorizontalAlignment="Left"
                     Command="{Binding ComicSelectAllCommand}"
-                    Content="全选" />
+                    Content="全选"
+                    IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}" />
                 <Button
                     Width="70"
                     Margin="0,0,10,0"
                     HorizontalAlignment="Left"
                     Command="{Binding ComicSelectRevertCommand}"
-                    Content="反选" />
+                    Content="反选"
+                    IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}" />
+                <TextBlock
+                    Margin="10,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="最大同时下载数量：" />
+                <TextBox
+                    Width="70"
+                    VerticalAlignment="Center"
+                    IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
+                    Text="{Binding MaxParallelDownloads, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
             <ToggleButton
                 Grid.Column="1"
@@ -105,12 +123,25 @@
                 hc:VisualElement.HighlightBrush="{DynamicResource PrimaryBrush}"
                 Content="保留原始章节标题"
                 IsChecked="{Binding KeepEpisodeTitle, Mode=TwoWay}"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Style="{StaticResource ToggleButtonSwitch}" />
+            <Button
+                Grid.Column="2"
+                Width="70"
+                Margin="5,0"
+                HorizontalAlignment="Right"
+                Command="{Binding CancelDownloadCommand}"
+                IsEnabled="{Binding Downloading}"
+                Style="{StaticResource ButtonDanger}">
+                停止下载
+            </Button>
             <Button
                 Grid.Column="3"
                 Width="70"
+                Margin="5,0,0,0"
                 HorizontalAlignment="Right"
                 Command="{Binding StartDownloadCommand}"
+                IsEnabled="{Binding Downloading, Converter={StaticResource Boolean2BooleanReConverter}}"
                 Style="{StaticResource ButtonPrimary}">
                 开始下载
             </Button>
@@ -126,19 +157,23 @@
             ItemsSource="{Binding Comics}"
             RowDetailsVisibilityMode="VisibleWhenSelected"
             RowHeaderWidth="60"
-            SelectedCellsChanged="DataGrid_SelectedCellsChanged"
             SelectionMode="Single">
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn
                     Width="70"
                     Binding="{Binding Selected}"
                     Header="选中" />
-
-                <DataGridTextColumn
-                    Width="auto"
-                    Binding="{Binding Comic.ComicTitle}"
-                    Header="标题"
-                    IsReadOnly="True" />
+                <DataGridTemplateColumn Width="*" Header="标题">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock
+                                Text="{Binding Comic.ComicTitle}"
+                                TextTrimming="WordEllipsis"
+                                TextWrapping="NoWrap"
+                                ToolTip="{Binding Comic.ComicTitle}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn
                     Binding="{Binding DownloadStatus}"
                     Header="下载状态"
@@ -150,7 +185,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Width="150" Header="章节进度">
+                <DataGridTemplateColumn Width="100" Header="章节进度">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock VerticalAlignment="Center">
@@ -161,6 +196,21 @@
                                     </MultiBinding>
                                 </TextBlock.Text>
                             </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Width="150" Header="操作">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ToggleButton
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding DataContext.GetComicsEpisodeCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                CommandParameter="{Binding}"
+                                Content="拉取章节"
+                                IsChecked="{Binding GettingEpisode}"
+                                IsEnabled="{Binding GettingEpisode, Converter={StaticResource Boolean2BooleanReConverter}}"
+                                Style="{StaticResource ToggleButtonLoading}" />
+
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
