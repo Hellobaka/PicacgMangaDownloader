@@ -271,8 +271,11 @@ namespace PicacgMangaDownloader.Model
     public enum DownloadStatus
     {
         NotDownloaded,
+
         Downloading,
+
         Downloaded,
+
         DownloadFailed
     }
 
@@ -402,7 +405,7 @@ namespace PicacgMangaDownloader.Model
             }
         }
 
-        private protected void OnPropertyChanged(string propertyName)
+        protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
@@ -511,7 +514,6 @@ namespace PicacgMangaDownloader.Model
             await Task.CompletedTask;
         }
 
-
         public void Subscribe()
         {
             foreach (var page in Pages)
@@ -537,7 +539,7 @@ namespace PicacgMangaDownloader.Model
             }
         }
 
-        private protected void OnPropertyChanged(string propertyName)
+        protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
@@ -573,7 +575,6 @@ namespace PicacgMangaDownloader.Model
             DownloadTask?.Cancel();
             UnsubscribeDownloadProgress();
         }
-
 
         public string DownloadStatus => Downloading switch
         {
@@ -620,7 +621,7 @@ namespace PicacgMangaDownloader.Model
             Downloading = Model.DownloadStatus.Downloaded;
         }
 
-        private protected void OnPropertyChanged(string propertyName)
+        protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

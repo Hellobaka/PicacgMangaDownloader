@@ -2,7 +2,6 @@
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace PicacgMangaDownloader.Controls
 {
@@ -12,7 +11,7 @@ namespace PicacgMangaDownloader.Controls
     public partial class AnimatedImage : UserControl
     {
         private int CurrentImageIndex { get; set; } = 0;
-      
+
         private DispatcherTimer AnimationTimer { get; set; }
 
         private List<BitmapImage> ImageSources { get; set; } = [];

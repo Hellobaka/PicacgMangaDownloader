@@ -82,7 +82,7 @@ namespace PicacgMangaDownloader.ViewModel
 
         public static DownloadViewModel Instance { get; set; }
 
-        private protected void OnPropertyChanged(string propertyName)
+        protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
