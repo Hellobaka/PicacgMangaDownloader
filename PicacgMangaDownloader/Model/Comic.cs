@@ -455,10 +455,12 @@ namespace PicacgMangaDownloader.Model
             this.Downloading = Model.DownloadStatus.Downloading;
 
             string episodeFolder = Path.Combine(
-                DownloadViewModel.Instance.DownloadPath ?? string.Empty,
                 ComicTitle ?? string.Empty,
                 DownloadViewModel.Instance.KeepEpisodeTitle ? (Episode?.EpisodeTitle ?? string.Empty) : (Episode?.EpisodeOrder?.ToString() ?? string.Empty));
-
+            Path.GetInvalidPathChars().Concat(Path.GetInvalidFileNameChars()).ToList().ForEach(c =>
+            {
+                episodeFolder = episodeFolder.Replace(c, '_');
+            });
             var tasks = Pages.Select(async page =>
             {
                 await DownloadViewModel.Instance.DownloadThrottler.WaitAsync(token);
@@ -468,7 +470,7 @@ namespace PicacgMangaDownloader.Model
                     {
                         return;
                     }
-                    page.CreateDownloadTask(episodeFolder);
+                    page.CreateDownloadTask(Path.Combine(DownloadViewModel.Instance.DownloadPath ?? string.Empty, episodeFolder));
                     if (page.DownloadTask is DownloadTask task)
                     {
                         try
@@ -559,6 +561,10 @@ namespace PicacgMangaDownloader.Model
             if (Page == null) return;
             var media = Page.Media;
             string fileName = media.OriginalName ?? Path.GetFileName(media.Path ?? Guid.NewGuid().ToString());
+            Path.GetInvalidPathChars().ToList().ForEach(c =>
+            {
+                fileName = fileName.Replace(c, '_');
+            });
             string filePath = Path.Combine(parentDirectory, fileName);
             DownloadTask = new DownloadTask
             {
