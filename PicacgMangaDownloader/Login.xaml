@@ -10,6 +10,7 @@
     Width="450"
     Height="352"
     d:DataContext="{d:DesignInstance Type=viewmodel:DownloadViewModel}"
+    Icon="Resources\ico.ico"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">
     <Grid>
